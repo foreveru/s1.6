@@ -34,7 +34,7 @@ logger.addHandler(handler)
 
 global g0area
 
-DEBUG        = True
+DEBUG        = False
 DEBUG_SIGN_D = False    # detect
 DEBUG_SIGN_R = False    # recognize
 DEBUG_OB     = False
@@ -204,12 +204,20 @@ class Car(object):
         self.vision_history_size = []
         self.time_counter = 0
 
-        # added by Elsie
-        self.first_frame = True
-        self.total_frame = 0
+        #### added by Elsie  #########################################
+        self.first_frame = True # 是否是第一帧
+        self.total_frame = 0 # 当前总帧数
 
+        # if crash, then back
+        self.total_back_frames = 15
+        self.curr_back_frame = 0
 
+        # after back, then make a turn to go on driving
+        self.total_turns = 5
+        self.curr_turn = 0
 
+        self.mark = 1
+        ##############################################################
 
 
         # "|-->": fork in the road ahead, the track will fork in two, follow the right lane.
@@ -488,8 +496,8 @@ class Car(object):
 
         return
 
-    def check_need_back_when_crash(self, speed):
-        if speed < 1e-2 and not self.first_frame:
+    def check_need_back_when_crash(self, speed, curr_frame):
+        if speed < 0.2 and not self.first_frame and curr_frame < 100:
             return True  # need back
         else:
             return False
@@ -572,23 +580,35 @@ class Car(object):
         #logger.info("self.frame_counter = %s, mid1 = %s, mid2 = %s" % (self.frame_counter, mid, mid2))
         print("self.frame_counter = %s,mid1=%s, mid2=%s" %(self.frame_counter, mid, mid2))
 
-        ##==============================================================================================================
-        # add by Elsie
+        ########     Add by Elsie      #################################################################################
         # if self.total_frame in [5, 6, 7, 8, 9, 10, 11, 12, 13]:
         #     self.control(-34.73333, 0.15)
         #     return
         # TODO 判断小车是否撞墙，是否需要倒车
-        need_back = self.check_need_back_when_crash(speed)
-        logger.info("Frame %s: need_back=%s" %(self.total_frame, need_back))
-        if need_back:
-            if self.back_frame < self.self.total_back_frame:
+        need_back = self.check_need_back_when_crash(speed, self.total_frame)
+        logger.info("Frame %s: need_back=%s, speed=%s" %(self.total_frame, need_back, speed))
+        if need_back or self.mark == 0:
+            logger.info("Frame %s: need_back=%s, self.mark=%s" % (self.total_frame, need_back, self.mark))
+            self.mark = 0
+            if self.curr_back_frame < self.total_back_frames:
+                self.curr_back_frame = self.curr_back_frame + 1
                 self.control(0.0, -1.0)  # 倒车
+                logger.info("in if-1")
                 return
             else:
-                self.back_frame = 0
-                self.control(40, 0.12)  # 右转
-                return
-
+                if self.curr_turn < self.total_turns:
+                    self.curr_turn = self.curr_turn + 1
+                    self.control(40, 1.0)
+                    logger.info("in if-2")
+                    return
+                else:
+                    self.mark = 1
+                    self.curr_back_frame = 0
+                    self.curr_turn = 0
+                    self.control(42, 0.1)  # 右转
+                    logger.info("in if-3")
+                    return
+        logger.info("self.curr_back_frame=%s, self.curr_turn=%s" % (self.curr_back_frame, self.curr_turn))
         if self.first_frame:
             self.first_frame = False
 
