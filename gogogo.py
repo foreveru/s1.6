@@ -205,6 +205,9 @@ class Car(object):
         self.time_counter = 0
 
         # added by Elsie
+        self.first_frame = True
+        self.total_frame = 0
+
 
 
 
@@ -286,7 +289,7 @@ class Car(object):
         if (DEBUG == True):
             print(xor_value, xmin, self.sign_sym_list[i])
 
-        logger.info('%f %s', xmin, self.sign_sym_list[i])
+        #logger.info('%f %s', xmin, self.sign_sym_list[i])
         
         return self.sign_sym_list[i]
         
@@ -485,7 +488,15 @@ class Car(object):
 
         return
 
+    def check_need_back_when_crash(self, speed):
+        if speed < 1e-2 and not self.first_frame:
+            return True  # need back
+        else:
+            return False
+
+
     def on_dashboard(self, dashboard):
+        self.total_frame = self.total_frame + 1
         if ((time() - self.ct) < 1):
             self.frame_counter = self.frame_counter + 1
         else:
@@ -558,16 +569,30 @@ class Car(object):
         # normal
         mid, lost1 = self.determine_middle(img, row_default=20, color=self.track) # mid:小车在当前赛道纵坐标为row_default处的中心位置，
         mid2, lost2 = self.determine_middle(img, row_default=5, color=self.track)
-        logger.info("self.frame_counter = %s, mid1 = %s, mid2 = %s" % (self.frame_counter, mid, mid2))
+        #logger.info("self.frame_counter = %s, mid1 = %s, mid2 = %s" % (self.frame_counter, mid, mid2))
         print("self.frame_counter = %s,mid1=%s, mid2=%s" %(self.frame_counter, mid, mid2))
 
-        # # add by Elsie
-        # if (DEBUG == True):
-        #     green = (0, 255, 0)  # 4
-        #     cv2.line(img, (mid, 20), (mid2, 5), green)
-        #     cv2.imshow("perspective",img)  # 显示原RGB图像
+        ##==============================================================================================================
+        # add by Elsie
+        # if self.total_frame in [5, 6, 7, 8, 9, 10, 11, 12, 13]:
+        #     self.control(-34.73333, 0.15)
+        #     return
+        # TODO 判断小车是否撞墙，是否需要倒车
+        need_back = self.check_need_back_when_crash(speed)
+        logger.info("Frame %s: need_back=%s" %(self.total_frame, need_back))
+        if need_back:
+            if self.back_frame < self.self.total_back_frame:
+                self.control(0.0, -1.0)  # 倒车
+                return
+            else:
+                self.back_frame = 0
+                self.control(40, 0.12)  # 右转
+                return
 
+        if self.first_frame:
+            self.first_frame = False
 
+        ##==============================================================================================================
         # calculate set speed
         set_speed = self.cal_speed(lost2)
         set_speed = 2 if set_speed>2 else set_speed
