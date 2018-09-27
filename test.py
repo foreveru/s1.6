@@ -261,42 +261,49 @@ def determine_middle(self, img, row_default=18, color=2):
     return middle, lost
 
 if __name__ == '__main__':
-    imgpath = './car2.jpg'
-    img = Image.open('D:\My Project\IntelligentCar\TrendFormulaCar\s1.6\car3.jpg')
+    img = Image.open('D:\My Project\IntelligentCar\TrendFormulaCar\s1.6\car1.jpg')
     oriimg = np.asarray(img)  # np_img.shape=(240,320,3)
-    if (DEBUG == True and DEBUG_SIGN_D == True):
-        cv2.imshow('ori img', oriimg)
-        cv2.waitKey(0)
-
-    flat_img = ImageProcessor.preprocess(oriimg)
-    print(flat_img)
-    if (DEBUG == True and DEBUG_SIGN_D == True):
-        cv2.imshow('flat_img',flat_img)
-        cv2.waitKey(0)
-
-    track = ImageProcessor.which_color_and_track(flat_img) # (-1, 0, 2, 0, 1, 2, 1, -1, 3)
-    track = list(track)
-    print(track)
+    ImageProcessor.show_image(oriimg, "original img")
+    res_img = ImageProcessor.check_if_car_crash(oriimg)
 
 
-    filterimg = ImageProcessor.image_filter(flat_img)
-    if (DEBUG == True and DEBUG_SIGN_D == True):
-        cv2.imshow('filter image',filterimg)
-        cv2.waitKey(0)
 
-    track_count = how_many_tracks(filterimg, track)
-    print(track_count)
-
-    img = perspective2(filterimg)
-    print("--------------")
-    print(img)
-    if (DEBUG == True and DEBUG_SIGN_D == True):
-        # cv2.imshow('perspective image',img)
-        # cv2.waitKey(0)
-        green = (0, 255, 0)  # 4
-        cv2.line(img, (110,20), (123, 5), green)  # 5
-        cv2.imshow('perspective',img)
-        cv2.waitKey()
+    # imgpath = './car2.jpg'
+    # img = Image.open('D:\My Project\IntelligentCar\TrendFormulaCar\s1.6\car3.jpg')
+    # oriimg = np.asarray(img)  # np_img.shape=(240,320,3)
+    # if (DEBUG == True and DEBUG_SIGN_D == True):
+    #     cv2.imshow('ori img', oriimg)
+    #     cv2.waitKey(0)
+    #
+    # flat_img = ImageProcessor.preprocess(oriimg)
+    # print(flat_img)
+    # if (DEBUG == True and DEBUG_SIGN_D == True):
+    #     cv2.imshow('flat_img',flat_img)
+    #     cv2.waitKey(0)
+    #
+    # track = ImageProcessor.which_color_and_track(flat_img) # (-1, 0, 2, 0, 1, 2, 1, -1, 3)
+    # track = list(track)
+    # print(track)
+    #
+    #
+    # filterimg = ImageProcessor.image_filter(flat_img)
+    # if (DEBUG == True and DEBUG_SIGN_D == True):
+    #     cv2.imshow('filter image',filterimg)
+    #     cv2.waitKey(0)
+    #
+    # track_count = how_many_tracks(filterimg, track)
+    # print(track_count)
+    #
+    # img = perspective2(filterimg)
+    # print("--------------")
+    # print(img)
+    # if (DEBUG == True and DEBUG_SIGN_D == True):
+    #     # cv2.imshow('perspective image',img)
+    #     # cv2.waitKey(0)
+    #     green = (0, 255, 0)  # 4
+    #     cv2.line(img, (110,20), (123, 5), green)  # 5
+    #     cv2.imshow('perspective',img)
+    #     cv2.waitKey()
 
 
 

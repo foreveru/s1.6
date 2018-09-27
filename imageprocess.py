@@ -295,6 +295,26 @@ class ImageProcessor(object):
 
         # some error?
         return -1, -1, -1, -1, -1, -1, -1, -1, -1
+
+    @staticmethod
+    def check_if_car_crash(srcimg, speed=1.0):
+        pass
+
+        # bottom_ratios = (0.57, 1.0)
+        # bottom_half_slice = slice(*(int(x * srcimg.shape[0]) for x in bottom_ratios))
+        # bottom_img = srcimg[bottom_half_slice, :, :]
+        # flatten_bot = ImageProcessor.elsie_flatten_rgb(bottom_img)
+        # ImageProcessor.show_image(flatten_bot, 'flatten_bottom_img')
+        #
+        # # check if area in front of car is same color
+        # # or the car speed < 0.01
+        # shape = flatten_bot.shape
+        # img_hsv = cv2.cvtColor(flatten_bot, cv2.COLOR_RGB2HSV)
+        # ImageProcessor.show_image(img_hsv, 'hsv_flatten_bottom_img')
+        # mask_black = cv2.inRange(img_hsv, np.array([0, 0, 0]), np.array([180, 255, 46])) / 255
+        # black_sum = np.sum(mask_black)
+        # ratio = black_sum / shape[0] / shape[1]
+        # print(ratio)
         
 
 def is_red(point):
