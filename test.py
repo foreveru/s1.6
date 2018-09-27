@@ -261,10 +261,28 @@ def determine_middle(self, img, row_default=18, color=2):
     return middle, lost
 
 if __name__ == '__main__':
-    img = Image.open('D:\My Project\IntelligentCar\TrendFormulaCar\s1.6\car1.jpg')
-    oriimg = np.asarray(img)  # np_img.shape=(240,320,3)
-    ImageProcessor.show_image(oriimg, "original img")
-    res_img = ImageProcessor.check_if_car_crash(oriimg)
+    img = Image.open('D:\My Project\Formular Trend\s1.6\eagle_2018_09_27_21_52_23_500.jpg')
+    srcimg = np.asarray(img)  # np_img.shape=(240,320,3)
+    ImageProcessor.show_image(srcimg, "original img")
+    shape = srcimg.shape
+    img_hsv = cv2.cvtColor(srcimg, cv2.COLOR_RGB2HSV)
+    ImageProcessor.show_image(img_hsv, 'hsv_img')
+    mask_black = cv2.inRange(img_hsv, np.array([0, 0, 0]), np.array([180, 255, 46])) / 255
+    mask_yellow = cv2.inRange(img_hsv, np.array([27, 42, 165]), np.array([34, 255, 255])) / 255
+    black_sum = np.sum(mask_black)
+    yellow_sum = np.sum(mask_yellow)
+    ratio_b = black_sum / shape[0] / shape[1]
+    ratio_y = yellow_sum / shape[0] / shape[1]
+    print(ratio_y)
+    print(ratio_b)
+    if ratio_b > 0.5 or ratio_y > 0.5:
+        pass
+
+
+    img = cv2.putText(srcimg, ratio_y, (50,50), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 2)
+    cv2.imshow("f",img)
+    cv2.waitKey()
+
 
 
 

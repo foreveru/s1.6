@@ -496,15 +496,26 @@ class Car(object):
 
         return
 
-    def check_need_back_when_crash(self, speed, curr_frame):
-        if speed < 0.2 and not self.first_frame and curr_frame < 100:
-            return True  # need back
+    def check_need_back_when_crash(self, srcimg, speed, curr_frame):
+        shape = srcimg.shape
+        img_hsv = cv2.cvtColor(srcimg, cv2.COLOR_RGB2HSV)
+        #ImageProcessor.show_image(img_hsv, 'hsv_img')
+        mask_black = cv2.inRange(img_hsv, np.array([0, 0, 0]), np.array([180, 255, 46])) / 255
+        mask_yellow = cv2.inRange(img_hsv, np.array([27, 42, 165]), np.array([34, 255, 255])) / 255
+        black_sum = np.sum(mask_black)
+        yellow_sum = np.sum(mask_yellow)
+        ratio_b = black_sum / shape[0] / shape[1]
+        ratio_y = yellow_sum / shape[0] / shape[1]
+        logger.info("ratio_black=%s, ratio_yellow=%s" % (ratio_b, ratio_y))
+        if ratio_b > 0.5 or ratio_y > 0.5:
+            return True   # the car has crashed
         else:
             return False
 
 
     def on_dashboard(self, dashboard):
         self.total_frame = self.total_frame + 1
+        logger.info("----------------------- frame: %s --------------------------" % self.total_frame)
         if ((time() - self.ct) < 1):
             self.frame_counter = self.frame_counter + 1
         else:
@@ -517,7 +528,8 @@ class Car(object):
         #normalize the units of all parameters
         throttle            = float(dashboard["throttle"])
         speed               = float(dashboard["speed"])
-        oriimg              = np.asarray(Image.open(BytesIO(base64.b64decode(dashboard["image"])))) # (240,320,3)
+        imgsrc = Image.open(BytesIO(base64.b64decode(dashboard["image"])))
+        oriimg              = np.asarray(imgsrc)  # (240,320,3)
 
         this_time = dashboard['time']
         #print(this_time)
@@ -581,14 +593,10 @@ class Car(object):
         print("self.frame_counter = %s,mid1=%s, mid2=%s" %(self.frame_counter, mid, mid2))
 
         ########     Add by Elsie      #################################################################################
-        # if self.total_frame in [5, 6, 7, 8, 9, 10, 11, 12, 13]:
-        #     self.control(-34.73333, 0.15)
-        #     return
         # TODO 判断小车是否撞墙，是否需要倒车
-        need_back = self.check_need_back_when_crash(speed, self.total_frame)
-        logger.info("Frame %s: need_back=%s, speed=%s" %(self.total_frame, need_back, speed))
-        if need_back or self.mark == 0:
-            logger.info("Frame %s: need_back=%s, self.mark=%s" % (self.total_frame, need_back, self.mark))
+        need_back = self.check_need_back_when_crash(oriimg, speed, self.total_frame)
+        logger.info("Current Frame: %s: need_back=%s, speed=%s" %(self.total_frame, need_back, speed))
+        if need_back:
             self.mark = 0
             if self.curr_back_frame < self.total_back_frames:
                 self.curr_back_frame = self.curr_back_frame + 1
@@ -596,18 +604,21 @@ class Car(object):
                 logger.info("in if-1")
                 return
             else:
-                if self.curr_turn < self.total_turns:
-                    self.curr_turn = self.curr_turn + 1
-                    self.control(40, 1.0)
-                    logger.info("in if-2")
-                    return
-                else:
-                    self.mark = 1
-                    self.curr_back_frame = 0
-                    self.curr_turn = 0
-                    self.control(42, 0.1)  # 右转
-                    logger.info("in if-3")
-                    return
+                self.curr_back_frame = 0
+                self.control(40, 1.0)
+                return
+                # if self.curr_turn < self.total_turns:
+                #     self.curr_turn = self.curr_turn + 1
+                #     self.control(40, 1.0)
+                #     logger.info("in if-2")
+                #     return
+                # else:
+                #     self.mark = 1
+                #     self.curr_back_frame = 0
+                #     self.curr_turn = 0
+                #     self.control(42, 0.1)  # 右转
+                #     logger.info("in if-3")
+                #     return
         logger.info("self.curr_back_frame=%s, self.curr_turn=%s" % (self.curr_back_frame, self.curr_turn))
         if self.first_frame:
             self.first_frame = False
