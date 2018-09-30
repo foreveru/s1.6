@@ -177,20 +177,113 @@ def xorcmp(s1, s2):
 def logit(msg):
     print("%s" % msg)
 
+class PID:
+    def __init__(self, Kp, Ki, Kd, max_integral, min_interval=0.001, set_point=0.0, last_time=None):
+        self._Kp = Kp
+        self._Ki = Ki
+        self._Kd = Kd
+        self._min_interval = min_interval
+        self._max_integral = max_integral
+
+        self._set_point = set_point
+        self._last_time = last_time if last_time is not None else time()
+        self._p_value = 0.0
+        self._i_value = 0.0
+        self._d_value = 0.0
+
+        self._delta_time = 0.0
+        self._delta_error = 0.0
+        self._last_error = 0.0
+        self._output = 0.0
+
+    def update(self, cur_value, cur_time = None):
+        if cur_time is None:
+            cur_time = time()
+
+        error = self._set_point - cur_value
+        d_time = cur_time - self._last_time
+        d_error = error - self._last_error
+
+        if d_time >= self._min_interval:
+            self._p_value = error
+            self._i_value = min(max(error * d_time, -self._max_integral), self._max_integral)
+            self._d_value = d_error / d_time if d_time > 0 else 0.0
+            self._output = self._p_value * self._Kp + self._i_value * self._Ki + self._d_value * self._Kd
+
+            self._delta_time = d_time
+            self._delta_error = d_error
+            self._last_time = cur_time
+            self._last_error = error
+
+        return self._output
+
+    def reset(self, last_time = None, set_point = 0.0):
+        self._set_point    = set_point
+        self._last_time    = last_time if last_time is not None else time()
+        self._p_value      = 0.0
+        self._i_value      = 0.0
+        self._d_value      = 0.0
+        self._delta_time       = 0.0
+        self._delta_error      = 0.0
+        self._last_error   = 0.0
+        self._output       = 0.0
+
+    def assign_set_point(self, set_point):
+        self._set_point = set_point
+
+    def get_set_point(self):
+        return self._set_point
+
+    def get_p_value(self):
+        return self._p_value
+
+    def get_i_value(self):
+        return self._i_value
+
+    def get_d_value(self):
+        return self._d_value
+
+    def get_delta_time(self):
+        return self._delta_time
+
+    def get_delta_error(self):
+        return self._delta_error
+
+    def get_last_error(self):
+        return self._last_error
+
+    def get_last_time(self):
+        return self._last_time
+
+    def get_output(self):
+        return self._output
+
+
+
+
 class Car(object):
     MAX_STEERING_ANGLE = 40.0
+    ############# Add PID control 09/30 ###
+    THROTTLE_PID_Kp = 0.13  #0.02
+    THROTTLE_PID_Ki = 0.005
+    THROTTLE_PID_Kd =  0.01   # 0.02
+    THROTTLE_PID_max_integral = 0.5
+    MAX_STEERING_HISTORY = 3
+    MAX_THROTTLE_HISTORY = 3
+    DEFAULT_SPEED = 2.2
+    ##########################################
 
     def __init__(self, control_function):
         self._control_function = control_function
         self.servo_err_history = collections.deque([0], 30)
-        self.motor_err_history = collections.deque([0,0,0,0,0,0], 90)
+        self.motor_err_history = collections.deque([0, 0, 0, 0, 0, 0], 90)
         self.speed_sum = 0
         self.last_time = 0
         self.steering_angle = 0
         self.throttle = 0
         self.car_status = 'INITIAL'
         self.track = 3
-        self.LOW_SPEED = 1.78
+        self.LOW_SPEED = 1.90
         self.last_throttle = 0
         self.across_flag = 0
         
@@ -204,6 +297,11 @@ class Car(object):
         self.vision_history_size = []
         self.time_counter = 0
 
+        #### add throttle PID control 0930 ###########################
+        self.throttle_pid = PID(Kp=self.THROTTLE_PID_Kp, Ki=self.THROTTLE_PID_Ki, Kd=self.THROTTLE_PID_Kd,
+                                max_integral=self.THROTTLE_PID_max_integral)
+        self.throttle_pid.assign_set_point(self.DEFAULT_SPEED)
+        self.throttle_history = []
         #### added by Elsie  #########################################
         self.first_frame = True # 是否是第一帧
         self.total_frame = 0 # 当前总帧数
@@ -507,10 +605,11 @@ class Car(object):
         ratio_b = black_sum / shape[0] / shape[1]
         ratio_y = yellow_sum / shape[0] / shape[1]
         logger.info("ratio_black=%s, ratio_yellow=%s" % (ratio_b, ratio_y))
-        if ratio_b > 0.5 or ratio_y > 0.5:
-            return True   # the car has crashed
-        else:
-            return False
+        return [ratio_y, ratio_b]
+        # if ratio_b > 0.5 or ratio_y > 0.5:
+        #     return True   # the car has crashed
+        # else:
+        #     return False
 
 
     def on_dashboard(self, dashboard):
@@ -526,7 +625,10 @@ class Car(object):
             self.time_counter = self.time_counter + 1     
             
         #normalize the units of all parameters
-        throttle            = float(dashboard["throttle"])
+        lap = float(dashboard["lap"])
+        last_steering_angle = np.pi / 2 - float(dashboard["steering_angle"]) / 180.0 * np.pi
+        throttle = float(dashboard["throttle"])
+        brake = float(dashboard["brakes"])
         speed               = float(dashboard["speed"])
         imgsrc = Image.open(BytesIO(base64.b64decode(dashboard["image"])))
         oriimg              = np.asarray(imgsrc)  # (240,320,3)
@@ -594,7 +696,10 @@ class Car(object):
 
         ########     Add by Elsie      #################################################################################
         # TODO 判断小车是否撞墙，是否需要倒车
-        need_back = self.check_need_back_when_crash(oriimg, speed, self.total_frame)
+        [ratio_y, ratio_b]= self.check_need_back_when_crash(oriimg, speed, self.total_frame)
+        need_back = False
+        if ratio_b > 0.4 or ratio_y > 0.4:
+            need_back = True   # the car has crashed
         logger.info("Current Frame: %s: need_back=%s, speed=%s" %(self.total_frame, need_back, speed))
         if need_back:
             self.mark = 0
@@ -627,12 +732,13 @@ class Car(object):
         # calculate set speed
         set_speed = self.cal_speed(lost2)
         set_speed = 2 if set_speed>2 else set_speed
-        #set_speed = 1
-        #cv2.line(img,(0,40),(320,40),(0,0,255),2)
-        #ImageProcessor.save_image('log', img)
+
+
+
         if lost1 == False:
             self.steering_angle = self.servo_control(mid, mid2, lost1, lost2)
-            self.throttle = self.motor_control(mid, speed, set_default=set_speed)
+            # self.throttle = self.motor_control(mid, speed, set_default=set_speed) # original
+            self.throttle = self.throttle_pid.update(speed)
         else:
             # if lost line, slow down and keep original direction
             self.throttle = self.motor_control(mid, speed, set_default=1)
@@ -644,7 +750,36 @@ class Car(object):
         #if (DEBUG == True):
         #    print (mid, mid2, lost1, lost2, self.steering_angle, self.track, self.car_status, set_speed, ' trackcount:', track_count)
 
+
+        ####### Add by Elsie 0930 ############
+        self.throttle_history.append(self.throttle)
+        self.throttle_history = self.throttle_history[-self.MAX_THROTTLE_HISTORY:]
+        self.throttle = sum(self.throttle_history[-15:]) / self.MAX_THROTTLE_HISTORY
+        ######################################
         self.control(self.steering_angle, self.throttle)
+
+        # 保存当前帧
+        text0 = "Frame: %s, speed=%s, " % (self.total_frame, speed)
+        text5 = "throttle=%s" % throttle
+        text1= " ratio_yellow=%s, " % ratio_y
+        text6 = "ratio_black=%s" %  ratio_b
+        text2 = "need_back=%s,curr_back_frame=%s" % (need_back, self.curr_back_frame)
+        text3 = "lap=%s, time=%s" % (lap, this_time)
+        text4 = "brakes=%s, steering_angle=%s" % (brake, last_steering_angle )
+        text7 = "current_track_count=%s" % track_count
+        text8 = "self.track = %s" %self.track
+        oriimg = cv2.cvtColor(oriimg, cv2.COLOR_BGR2RGB)
+        cv2.putText(oriimg, text0, (10, 10), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        cv2.putText(oriimg, text5, (10, 30), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        cv2.putText(oriimg, text1, (10, 50), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        cv2.putText(oriimg, text6, (10, 70), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        cv2.putText(oriimg, text2, (10, 90), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        cv2.putText(oriimg, text3, (10, 110), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        cv2.putText(oriimg, text4, (10, 130), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        cv2.putText(oriimg, text7, (10, 150), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        cv2.putText(oriimg, text8, (10, 170), cv2.FONT_HERSHEY_PLAIN, 1.0, (0, 0, 255), 1)
+        filename = "%s.jpg" % self.total_frame
+        cv2.imwrite(os.path.join('IMG', filename), oriimg, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
 
 
     def control(self, steering_angle, throttle):
@@ -656,8 +791,8 @@ class Car(object):
         delta_err = err - self.servo_err_history[5]
 
         if abs(err) < 40:
-            Kp = 0.09
-            Kd = 0.02  # 0.02
+            Kp = 0.09  # 在合理的范围内Kp越大控制的效果越好（越快速的回到参考线附近）
+            Kd = 0.02  # 0.02  # 增大D系数会增大无人车快速向参考线方向的运动的“抵抗力”从而使得向参考线方向的运动变得更加平滑
         elif abs(err) < 15:
             Kp = 0.075
             Kd = 0.02   # 0.02
@@ -682,16 +817,19 @@ class Car(object):
         if cnt < 2:
             return self.LOW_SPEED
         if cnt < 4:
-            return self.LOW_SPEED + 0.09  #0.05
+            return self.LOW_SPEED + 0.13  #0.05
         if cnt < 6:
-            return self.LOW_SPEED + (0 if lost2 else 0.13)  # 0.1
+            return self.LOW_SPEED + (0 if lost2 else 0.16)  # 0.1
         if cnt < 8:
             return self.LOW_SPEED + (0 if lost2 else 0.18)  # 0.15
         else:
             return self.LOW_SPEED + (0 if lost2 else 0.2)   # 0.2
 
     def motor_control(self, middle, speed, set_default=0.5):
-        Kp = 0.12
+        # default value
+        # Kp = 0.12
+        # Ki = 0.001
+        Kp = 0.15
         Ki = 0.001
 
         set_speed = set_default
