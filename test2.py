@@ -1,24 +1,40 @@
-# encoding: utf-8
-# 黄色检测
-import numpy as np
-import argparse
-import cv2
+import os
+import time, shutil
 
-image = cv2.imread('./red.jpg')
-hsv_img = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+def calc_tar_pkg_name(csv_path ,team=319, track='t6'):
+    import csv
+    from datetime import datetime
+    with open(csv_path, 'rb') as f:
+        lines = csv.reader(f)
+        lines = [line for line in lines]
+    frames = len(lines)
+    timestart = datetime.strptime(lines[0][0][-27:-4] + '000', "%Y_%m_%d_%H_%M_%S_%f")
+    timeend = datetime.strptime(lines[-1][0][-27:-4] + '000', "%Y_%m_%d_%H_%M_%S_%f")
+    escape = timeend - timestart
+    mseconds = int(escape.seconds * 1000 + escape.microseconds / 1000)
+    day = timestart.strftime("%Y%m%d")
+    return "{}_{}_{}_{}_{}.tar.gz".format(day, team, track, frames, mseconds)
 
-lower_r = np.array([0, 123, 100])
-upper_r = np.array([5, 255, 255])
 
-mask = cv2.inRange(hsv_img, lower_r, upper_r)
-dilated = cv2.dilate(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3)), iterations=2)
-circles = cv2.HoughCircles(dilated, cv2.HOUGH_GRADIENT, 1, 100, param1=15, param2=7, minRadius=10, maxRadius=20)
 
-# if circles is not None:
-#     x, y, radius = circles[0][0]
-#     center = (x, y)
-#     cv2.circle(image, center, radius, (0, 255, 0), 2)
-#res = cv2.bitwise_and(hsv_img, hsv_img, mask=mask)
-cv2.imshow("image", np.hstack([image, hsv_img, dilated]))
-cv2.waitKey(0)
+def process_log_folder(log_folder):
+    '''
+    :param log_folder: simulator path
+    :return: 
+    '''
+    src = os.path.join(log_folder, "Log")
+    dst = os.path.join(log_folder, str(int(time.time())), "Log")
+    shutil.move(src, dst)
+    cur_path = os.getcwd()
+    os.chdir(os.path.dirname(dst))
 
+    import tarfile
+    tar = tarfile.open(os.path.join(log_folder, calc_tar_pkg_name(os.path.join(dst, "driving_log.csv"))), "w:gz")
+    tar.add("Log")
+    tar.close()
+    os.chdir(cur_path)
+
+
+if __name__ == '__main__':
+    log_folder = r'D:\My Project\Formular Trend\Simulator\formula-trend-1.0.1\formula-trend-1.0.1\Windows'
+    process_log_folder(log_folder)
